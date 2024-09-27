@@ -1,0 +1,8 @@
+.root {
+  height: 100%;
+  font-family: sans-serif;
+  background-color: #101010;
+  flex-basis: 100%;
+  overflow-y: auto;
+  flex-direction: column;
+}
