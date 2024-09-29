@@ -6,4 +6,3 @@ librosa
 pandas
 numpy
 PyYAML
-cv2
