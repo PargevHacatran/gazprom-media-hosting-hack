@@ -1,0 +1,9 @@
+torch==2.4.1
+torchvision==0.15.2
+whisper
+ffmpeg-python
+librosa
+pandas
+numpy
+PyYAML
+

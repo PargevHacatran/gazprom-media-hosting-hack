@@ -1,0 +1,106 @@
+import os
+import torch
+import librosa
+import numpy as np
+import soundfile as sf
+import whisper
+import ffmpeg
+import yaml
+import json
+
+def load_config(config_path="../config.yaml"):
+    """
+    Загружает конфигурационный файл.
+    """
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+    return config
+
+def extract_audio_from_video(video_path, audio_output_path):
+    """
+    Извлекает аудио из видео с помощью ffmpeg.
+    """
+    print(f"Извлекаем аудио из видео: {video_path}")
+    ffmpeg.input(video_path).output(audio_output_path).run(overwrite_output=True)
+
+def split_audio_into_chunks(audio_path, chunk_duration):
+    """
+    Делит аудио на фрагменты указанной длительности.
+    """
+    print(f"Делим аудио на фрагменты по {chunk_duration} секунд")
+    audio, sr = librosa.load(audio_path, sr=44100)  # Загружаем аудио с частотой 44100 Гц
+    chunks = []
+    chunk_samples = int(chunk_duration * sr)
+    
+    for i in range(0, len(audio), chunk_samples):
+        chunks.append(audio[i:i+chunk_samples])
+
+    return chunks, sr
+
+def resample_audio(audio_fragments, original_sr, target_sr=16000):
+    """
+    Ресемплирует аудио до 16000 Гц.
+    """
+    print("Ресемплируем аудио до 16000 Гц")
+    resampled_fragments = [librosa.resample(chunk, orig_sr=original_sr, target_sr=target_sr) for chunk in audio_fragments]
+    return resampled_fragments
+
+def transcribe_audio_with_whisper(model, audio_fragments, sample_rate=16000):
+    """
+    Транскрибирует аудио фрагменты с использованием модели Whisper.
+    """
+    transcriptions = []
+    print("Начинаем транскрибацию аудио с помощью Whisper...")
+
+    for chunk in audio_fragments:
+        # Whisper работает с файлами, поэтому нужно временно сохранять каждый фрагмент
+        temp_path = "temp_chunk.wav"
+        sf.write(temp_path, chunk, sample_rate)
+
+        # Транскрибируем с использованием Whisper
+        result = model.transcribe(temp_path)
+        transcriptions.append(result['text'].strip())
+
+        # Удаляем временный файл
+        os.remove(temp_path)
+
+    return transcriptions
+
+def process_audio(video_path, config, json_path):
+    """
+    Основной процесс обработки аудио из видео: извлечение, деление на фрагменты, транскрибация.
+    """
+    audio_output_path = "./audio/full_audio.wav"
+    extract_audio_from_video(video_path, audio_output_path)
+
+    audio_fragments, original_sr = split_audio_into_chunks(audio_output_path, config["settings"]["segment_duration"])
+
+    # Загружаем модель Whisper
+    print("Загружаем модель Whisper для транскрибации...")
+    whisper_model = whisper.load_model("medium")  # Можно выбрать "small", "medium", "large" в зависимости от мощности
+
+    # Транскрибируем аудио с помощью Whisper
+    transcriptions = transcribe_audio_with_whisper(whisper_model, audio_fragments, sample_rate=original_sr)
+
+    # Сохраняем транскрипции в JSON
+    result = []
+    for idx, transcription in enumerate(transcriptions):
+        result.append({
+            "start": idx * config["settings"]["segment_duration"],
+            "end": (idx + 1) * config["settings"]["segment_duration"],
+            "description": f"Транскрибация: {transcription}"
+        })
+
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(result, f, ensure_ascii=False, indent=4)
+
+    print(f"Аудио транскрибировано и сохранено в {json_path}")
+
+def main():
+    config = load_config("../config.yaml")
+    video_path = "C:/Users/xenia/Desktop/Хакатон/пример2.mp4"
+    json_path = "./output/audio_transcriptions.json"
+    process_audio(video_path, config, json_path)
+
+if __name__ == "__main__":
+    main()

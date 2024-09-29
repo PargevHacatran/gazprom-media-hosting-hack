@@ -1,0 +1,4 @@
+# config.yaml
+settings:
+  segment_duration: 7  # Длительность сегментов в секундах
+
